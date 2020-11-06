@@ -1,6 +1,6 @@
 ; vim: tabstop=8 softtabstop=0 shiftwidth=8 textwidth=80 noexpandtab syntax=nasm
 
-CPU 286
+CPU 8086
 
 org 0x100
 
@@ -94,7 +94,8 @@ interpret_add:
 	; Intcode address in the third operand.
 
 	mov bx,[si+12]
-	shl bx,2
+	shl bx,1
+	shl bx,1
 
 	; Copy the value of the interpreter Y register to the Intcode program
 	; memory.
@@ -160,7 +161,8 @@ interpret_mul:
 	; Intcode address in the third operand.
 
 	mov bx,[si+12]
-	shl bx,2
+	shl bx,1
+	shl bx,1
 
 	; Copy the value of the interpreter Z register to the Intcode program
 	; memory.
@@ -204,7 +206,8 @@ deref:
 	;   BX - the Intcode address of the value to store
 	;   DI - the address to store the value
 
-	shl bx,2
+	shl bx,1
+	shl bx,1
 	mov ax,[intcode_program+bx] ; low word
 	mov [di],ax
 	mov ax,[intcode_program+bx+2] ; high word
@@ -252,7 +255,10 @@ printi32:
 	; Arguments:
 	;   DX - the address of the number
 
-	pusha
+	push ax
+	push bx
+	push cx
+	push dx
 
 	mov bx,dx
 	mov si,2 ; two words, starting with the high word
@@ -260,7 +266,10 @@ printi32:
 	mov ax,[bx+si] ; read word into AX
 	mov cx,4 ; four bytes
 .nibble:
-	rol ax,4 ; rotate in the next nibble to print
+	rol ax,1 ; rotate in the next nibble to print
+	rol ax,1
+	rol ax,1
+	rol ax,1
 	mov dl,al
 	and dl,0x0f
 	add dl,'0' ; convert to ASCII
@@ -276,7 +285,10 @@ printi32:
 	sub si,2 ; repeat for the low word
 	jnb .word
 
-	popa
+	pop dx
+	pop cx
+	pop dx
+	pop ax
 	ret
 
 section .data
