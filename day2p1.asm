@@ -82,9 +82,8 @@ interpret_add:
 	; Add the interpreter X and Y registers.
 	; Store the result in the Y register.
 
-	clc
 	mov ax,[reg_x]
-	adc ax,[reg_y]
+	add ax,[reg_y]
 	mov [reg_y],ax
 	mov ax,[reg_x+2]
 	adc ax,[reg_y+2]
