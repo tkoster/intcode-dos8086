@@ -285,7 +285,7 @@ printi32:
 
 	pop dx
 	pop cx
-	pop dx
+	pop bx
 	pop ax
 	ret
 
