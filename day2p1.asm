@@ -1,6 +1,6 @@
 ; vim: tabstop=8 softtabstop=0 shiftwidth=8 textwidth=80 noexpandtab syntax=nasm
 
-	CPU 286
+CPU 286
 
 %include "exebin.mac"
 
@@ -32,19 +32,28 @@ interpret:
 	mov byte [reg_start+bx-1],0x00
 	loop .l0
 
-	; DEBUG: set some registers
+	; SI contains the address of the current Intcode instruction.
+	; Initialize SI to the address of the Intcode program.
 
-	mov word [reg_op+2],0x3322
-	mov word [reg_op],0x1100
-	mov word [reg_a+2],0xddcc
-	mov word [reg_a],0xbbaa
-
-	; DEBUG: Print the values of the Intcode interpreter registers.
-
-	call print_intocode_registers
+	mov si,intcode_program
 
 interpret_loop:
-	; TODO: Decode and execute Incode instruction.
+	; Load next opcode into AX.
+	; Decode it and jump to its code.
+
+	mov ax,[si]
+	cmp ax,1
+	je interpret_add
+	cmp ax,2
+	je interpret_mul
+	cmp ax,99
+	je interpret_hlt
+
+	; Invalid Intcode instruction.
+	; Print an error message.
+
+	mov dx,error_invalid_instruction
+	call prints
 
 interpret_end:
 	; Print some newlines and return.
@@ -53,21 +62,172 @@ interpret_end:
 	times 3 call prints
 	ret
 
-print_intocode_registers:
-	; Print the values of the Intcode interpreter registers.
+interpret_add:
+	; Print the opcode name "add".
+
+	mov dx,op_add
+	call prints
+
+	; Dereference the first operand and store the value in interpreter
+	; register X.
+
+	mov bx,[si+4]
+	mov di,reg_x
+	call deref
+
+	; Dereference the second operand and store the value in interpreter
+	; register Y.
+
+	mov bx,[si+8]
+	mov di,reg_y
+	call deref
+
+	; Add the interpreter X and Y registers.
+	; Store the result in the Y register.
+
+	clc
+	mov ax,[reg_x]
+	adc ax,[reg_y]
+	mov [reg_y],ax
+	mov ax,[reg_x+2]
+	adc ax,[reg_y+2]
+	mov [reg_y+2],ax
+
+	; Set BX to the offset (in bytes) for the destination referenced by the
+	; Intcode address in the third operand.
+
+	mov bx,[si+12]
+	shl bx,2
+
+	; Copy the value of the interpreter Y register to the Intcode program
+	; memory.
+
+	mov ax,[reg_y]
+	mov [intcode_program+bx],ax
+	mov ax,[reg_y+2]
+	mov [intcode_program+bx+2],ax
+
+	; Advance the Intcode program counter by 4 (16 bytes) and process the
+	; next instruction.
+
+	add si,16
+	jmp interpret_loop
+
+interpret_mul:
+	; Print the opcode name "mul".
+
+	mov dx,op_mul
+	call prints
+
+	; Dereference the first operand and store the value in interpreter
+	; register X.
+
+	mov bx,[si+4]
+	mov di,reg_x
+	call deref
+
+	; Dereference the second operand and store the value in interpreter
+	; register Y.
+
+	mov bx,[si+8]
+	mov di,reg_y
+	call deref
+
+	; Multiply the interpreter X and Y registers.
+
+	mov ax,[reg_x]    ; multiplicand low
+	mov dx,[reg_x+2]  ; multiplicand high
+	mov bx,[reg_y]    ; multiplier low
+	mov cx,[reg_y+2]  ; multiplier high
+	xchg bx,ax
+	push ax
+	xchg dx,ax
+	or ax,ax
+	jz .la
+	mul dx
+.la:	xchg cx,ax
+	or ax,ax
+	jz .lb
+	mul bx
+	add cx,ax
+.lb:	pop ax
+	mul bx
+	add dx,cx
+
+	; Store product in the Z register.
+
+	mov [reg_z],ax
+	mov [reg_z+2],dx
+
+	; Set BX to the offset (in bytes) for the destination referenced by the
+	; Intcode address in the third operand.
+
+	mov bx,[si+12]
+	shl bx,2
+
+	; Copy the value of the interpreter Z register to the Intcode program
+	; memory.
+
+	mov ax,[reg_z]
+	mov [intcode_program+bx],ax
+	mov ax,[reg_z+2]
+	mov [intcode_program+bx+2],ax
+
+	; Advance the Intcode program counter by 4 (16 bytes) and process the
+	; next instruction.
+
+	add si,16
+	jmp interpret_loop
+
+interpret_hlt:
+	; Print the opcode name "hlt".
+
+	mov dx,op_hlt
+	call prints
+
+	; Print the first two cells of Intcode memory as output.
+
+	call print_intcode_memory
+
+	; Exit the interpreter.
+
+	jmp interpret_end
+
+deref:
+	; Dereference an Intcode address.
 	;
-	; For debugging.
+	; This subroutine interprets the value in BX as an Intcode address. The
+	; 32-bit value at that location in Intcode memory is copied to the
+	; memory location addresses by DI.
+	;
+	; An Intcode address is an offset into the Intcode program memory (in
+	; cells, not bytes or words).
+	;
+	; Arguments:
+	;   BX - the Intcode address of the value to store
+	;   DI - the address to store the value
+
+	shl bx,2
+	mov ax,[intcode_program+bx] ; low word
+	mov [di],ax
+	mov ax,[intcode_program+bx+2] ; high word
+	mov [di+2],ax
+	ret
+
+print_intcode_memory:
+	; Print the first two values of the Intcode program memory.
+	;
+	; For debugging and day 2 output.
 
 	push dx
 
-	mov dx,reg_op
+	mov dx,intcode_program
 	call printi32
 	mov dx,space
 	call prints
-
-	mov dx,reg_a
+	mov dx,intcode_program+4
 	call printi32
-	mov dx,space
+	mov dx,crlf
 	call prints
 
 	pop dx
@@ -124,28 +284,41 @@ printi32:
 
 section .data
 
-; Strings
+; Strings:
 
-header:
-	db 'Intcode Interpreter - By Thomas Koster',13,10,'$'
-crlf:
-	db 13,10,'$'
-space:
-	db ' ','$'
+header: db 'Intcode Interpreter - By Thomas Koster',13,10,'$'
+crlf:	db 13,10,'$'
+space:	db ' $'
+op_add:	db 'add',13,10,'$'
+op_mul:	db 'mul',13,10,'$'
+op_hlt:	db 'hlt',13,10,'$'
+error_invalid_instruction:
+	db 'Error: invalid instruction$'
 
-; Intcode program
+; Intcode program memory:
 
 intcode_program:
-	dd 1,0,0,0,99
+	; Gravity assist program, expected output: 007a54b4 (8017076 decimal)
+
+	dd 1,12,2,3,1,1,2,3,1,3,4,3,1,5,0,3,2,10,1,19,1,6,19,23,2,23,6,27,1,5,27,31,1,31,9,35,2,10,35,39,1,5,39,43,2,43,10,47,1,47,6,51,2,51,6,55,2,55,13,59,2,6,59,63,1,63,5,67,1,6,67,71,2,71,9,75,1,6,75,79,2,13,79,83,1,9,83,87,1,87,13,91,2,91,10,95,1,6,95,99,1,99,13,103,1,13,103,107,2,107,10,111,1,9,111,115,1,115,10,119,1,5,119,123,1,6,123,127,1,10,127,131,1,2,131,135,1,135,10,0,99,2,14,0,0
+
+	; This padding is necessary to produce a valid EXE. Without it, the
+	; program is truncated when DOS loads it into memory. I suspect a bug in
+	; the macro used to produce the EXE file header.
+
+	times 20 db 1
 
 section .bss
 
-; Interpreter registers
+; Interpreter registers:
+; These are used internally by the interpreter to execute Intcode instructions.
 
 reg_start:
-reg_op:
+reg_x:
 	resd 1
-reg_a:
+reg_y:
+	resd 1
+reg_z:
 	resd 1
 reg_end:
 
