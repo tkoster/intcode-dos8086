@@ -132,11 +132,10 @@ interpret_mul:
 
 	; Multiply the interpreter X and Y registers.
 
-	mov ax,[reg_x]    ; multiplicand low
-	mov dx,[reg_x+2]  ; multiplicand high
-	mov bx,[reg_y]    ; multiplier low
+	mov ax,[reg_y]    ; multiplier low
+	mov bx,[reg_x]    ; multiplicand low
 	mov cx,[reg_y+2]  ; multiplier high
-	xchg bx,ax
+	mov dx,[reg_x+2]  ; multiplicand high
 	push ax
 	xchg dx,ax
 	or ax,ax
